@@ -179,10 +179,11 @@ export function SettingsModal() {
     // listener can't immediately re-override the user's pick.
     dispatch({ type: 'SET_THEME_AUTO', auto: false });
     dispatch({ type: 'SET_THEME', theme: th });
+    try { localStorage.setItem('cc-theme-auto', '0'); } catch { /* Best-effort operation; failure is non-fatal. */ }
   };
   const setThemeAuto = (auto: boolean) => {
     dispatch({ type: 'SET_THEME_AUTO', auto });
-    try { localStorage.setItem('cc-theme-auto', String(auto)); } catch { /* Best-effort operation; failure is non-fatal. */ }
+    try { localStorage.setItem('cc-theme-auto', auto ? '1' : '0'); } catch { /* Best-effort operation; failure is non-fatal. */ }
   };
   const setShape = (s: ThemeShape) => dispatch({ type: 'SET_SHAPE', shape: s });
   const setIconTheme = (th: IconTheme) => {
