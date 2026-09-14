@@ -29,8 +29,67 @@
 </p>
 
 <p align="center">
+  <sub><strong>个人分支 / Personal fork</strong> — 这个仓库是 <a href="https://github.com/zgqy379">@zgqy379</a> 在 Coffee CLI 上维护的个人分支（上游：<a href="https://github.com/edison7009/Coffee-CLI">edison7009/Coffee-CLI</a>），
+  在 <code>main</code> 之上新增了「跟随系统主题」，详见下方 <strong>Follow-System Theme</strong> 一节。产品本身由上游团队与社区共同开发，本分支只在 README 顶部与代码 diff 中标注自己的改动。</sub>
+</p>
+
+<p align="center">
   <img src="screenshot/hero.png" alt="Coffee CLI — Launchpad with underwater wallpaper" width="860" />
 </p>
+
+---
+
+## Follow-System Theme · 跟随系统主题
+
+> **本节描述的是本分支新增的个人改动，不属于上游功能。**
+
+<p align="center">
+  <img src="screenshot/follow-system.gif" alt="跟随系统主题：系统深色 → 代码黑，系统浅色 → 明亮，实时切换，无需重启" width="720" />
+  <br />
+  <sub>在「设置 → 外观」打开「跟随系统」后，系统切到夜间模式，整个应用实时跟着变 —— 不用重启，首帧也不会闪一下旧主题。</sub>
+</p>
+
+| 系统深色 → 代码黑（Obsidian） | 系统浅色 → 明亮（Light） |
+|:---:|:---:|
+| <img src="screenshot/follow-system-obsidian.png" alt="系统处于深色时的外观设置面板" width="380" /> | <img src="screenshot/follow-system-light.png" alt="系统处于浅色时的外观设置面板" width="380" /> |
+| <sub>[全窗口截图](screenshot/follow-system-app-obsidian.png)</sub> | <sub>[全窗口截图](screenshot/follow-system-app-light.png)</sub> |
+
+**English summary** — The app follows the OS light/dark preference and re-themes the whole UI live: OS dark → *Obsidian*, OS light → *Light*. Picking a swatch by hand turns auto-follow off (manual wins). A pre-paint inline script in `index.html` resolves the theme before React mounts, so the first frame never flashes the previous theme. Detail below is in Chinese.
+
+**为什么做这件事.** 桌面应用的默认观感应该尊重操作系统。macOS 与 Windows 都提供浅色/深色偏好，用户白天写代码、入夜切到暗色系统主题时，不该还要回设置里翻一次色卡。上游当时没有这个能力（[issue #138](https://github.com/edison7009/Coffee-CLI/issues/138)），我把它补上了。
+
+**具体行为**
+
+- 系统深色 → 「代码黑 Obsidian」；系统浅色 → 「明亮 Light」
+- 切换**实时生效**：不用重启应用，也不会打断正在运行的终端会话
+- 手动点任意色卡 = 一次明确的选择 → 自动关闭「跟随系统」，此后系统变化不再覆盖它
+- 自动跟随开启时，当前色卡的选择环变成**虚线**，提示这一次是系统在替你选
+- 首帧不闪：`index.html` 在 React 挂载前就按系统偏好写好 `data-theme`
+
+**实现要点**
+
+| 文件 | 作用 |
+|---|---|
+| `src-ui/src/lib/system-theme.ts` | 纯函数映射：OS 偏好 → 主题码（`dark → obsidian`、`light → light`）。store 与 App 共用同一处真源，不把魔法字符串散到各文件 |
+| `src-ui/src/store/app-state.tsx` | 新增 `themeAuto` 状态与 `SET_THEME_AUTO` action；初始化时若自动跟随已开启，直接用系统偏好解析**第一帧**主题 |
+| `src-ui/src/App.tsx` | 双通道监听：CSS 侧 `matchMedia('(prefers-color-scheme: dark)')` + Tauri 侧 `onThemeChanged`（宿主层事件，可覆盖部分环境中 `matchMedia` 漏报的切换），两者互为兜底 |
+| `src-ui/index.html` | 首屏内联脚本，在 React 之前读系统偏好并写入 `data-theme`，消除首帧闪烁 |
+| `src-ui/src/components/common/SettingsModal.tsx` / `.css` | 「外观」标题行右侧的「跟随系统」开关，以及虚线选择环样式 |
+| `src-ui/src/i18n/*.ts` | 11 种语言补 `theme.auto` 文案 |
+
+两个刻意的取舍：
+
+1. **只映射两套配色**（明亮 ↔ 代码黑）。给 18 套主题两两配对深浅色，等于替用户做主观审美判断，结果也不可预期；两个端点已经覆盖「白天 / 夜里」这个真实场景。
+2. **手动永远优先**。点色卡即关闭自动跟随，系统监听随即休眠，不会在用户选完之后再把主题抢回去。
+
+**顺带修掉的一个 bug.** `cc-theme-auto` 原先写入的是 `String(auto)`（即 `"true"` / `"false"`），而首屏脚本与 store 的读取判据是 `=== '1'` —— 于是开关看着是开的，重启后却静默失效。现已统一为 `'1' / '0'`，并让「手动点色卡」这条路径也显式写入 `'0'`，否则下次启动会把自动跟随又读回来。
+
+**上游状态.** 该改动曾以上游 PR [#139](https://github.com/edison7009/Coffee-CLI/pull/139) 提交，维护者认为它不属于产品必要功能而关闭。对上游而言可以不做，但对我自己的日常使用有价值，因此作为个人分支保留在这里：改动自成一体，不依赖上游任何未合并内容，可以随时 rebase 到最新 `main`。
+
+- 与本分支的完整 diff：[上游 main … 本分支 main](https://github.com/edison7009/Coffee-CLI/compare/main...zgqy379:main)
+- 想自己跑一遍：见下方 [Build from Source](#build-from-source)（需要 Rust、Node.js 与 Tauri CLI）
+
+<sub>文中截图取自真实运行的前端界面（Vite dev server + 浏览器渲染），不是手绘示意图。</sub>
 
 ---
 
